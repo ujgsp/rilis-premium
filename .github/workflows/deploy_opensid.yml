@@ -1,4 +1,4 @@
-name: Deploy OpenDK with Ansible
+name: Deploy OpenSID with Ansible
 
 on:
   release:
