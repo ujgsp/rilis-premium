@@ -94,7 +94,7 @@ jobs:
           script: |
             set -euo pipefail
             cd ${{ secrets.CICD_SERVER_DEVSIAPPAKAI_PATH }}
-            ansible-playbook zap_scan_github_action.yml \
+            ansible-playbook -i inventory.yml zap_scan_github_action.yml \
               --extra-vars "
                 zap_target_url=${{ env.TARGET_URL }}
                 zap_high=${{ env.zap_high }}
