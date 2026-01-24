@@ -8,7 +8,7 @@ on:
       target_url:
         description: "Target URL to scan"
         required: false
-        default: ${{ secrets.ZAP_TARGET_URL }}
+        # default: ${{ secrets.ZAP_TARGET_URL }}
 
 permissions:
   contents: read
