@@ -1,12 +1,14 @@
 name: ZAP Scan After Release Deployment
 
 on:
-  workflow_run:
-    workflows: ["Deploy OpenSID with Ansible"]
-    types:
-      - completed
-    branches:
-      - master
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to scan (optional, defaults to ZAP_TARGET_URL secret)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -18,11 +20,11 @@ concurrency:
 jobs:
   zap-scan-production:
     # Only run if:
-    # 1. The deploy workflow completed successfully
-    # 2. It was triggered by a release event (not prerelease)
+    # 1. Manual trigger (workflow_dispatch), OR
+    # 2. Release from master branch AND not a prerelease
     if: |
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'release'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.release.target_commitish == 'master' && github.event.release.prerelease == false)
     name: Run ZAP Security Scan on Production
     runs-on: ubuntu-latest
 
@@ -30,44 +32,45 @@ jobs:
       - name: Checkout Ansible Code
         uses: actions/checkout@v4
 
-      - name: Get Release Information
+      - name: Set Release Information
         id: release_info
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Get the release that triggered the deploy workflow
-            const releases = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 1
-            });
-            
-            if (releases.data.length > 0) {
-              const release = releases.data[0];
-              core.setOutput('tag_name', release.tag_name);
-              core.setOutput('is_prerelease', release.prerelease);
-              core.setOutput('release_name', release.name || release.tag_name);
-            }
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag_name=manual-trigger" >> $GITHUB_OUTPUT
+            echo "release_name=Manual Trigger" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "release_name=${{ github.event.release.name || github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "is_prerelease=${{ github.event.release.prerelease }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set Target URL
+        id: target_url
+        run: |
+          if [ -n "${{ github.event.inputs.target_url }}" ]; then
+            echo "url=${{ github.event.inputs.target_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ secrets.ZAP_TARGET_URL }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run ZAP Scan via Ansible
-        # Only proceed if it's not a prerelease
-        if: steps.release_info.outputs.is_prerelease == 'false'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_VPN_IP }}
-          username: ${{ secrets.CICD_SERVER_VPN_USER }}
-          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
+          host: ${{ secrets.CICD_SERVER_IP }}
+          username: ${{ secrets.CICD_SERVER_USER }}
+          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
+            cd ${{ secrets.CICD_SERVER_PATH }}
             
             echo "🛡️ Starting OWASP ZAP Security Scan for Production Release"
             echo "Release: ${{ steps.release_info.outputs.release_name }}"
-            echo "Target: ${{ secrets.ZAP_TARGET_URL }}"
+            echo "Target: ${{ steps.target_url.outputs.url }}"
             
             ansible-playbook -i inventories/production/inventory.yml playbooks/zap-scan.yml \
-              --extra-vars "zap_target_url=${{ secrets.ZAP_TARGET_URL }}"
+              --extra-vars "zap_target_url=${{ steps.target_url.outputs.url }}"
 
       - name: Summary
         if: always()
@@ -75,7 +78,7 @@ jobs:
           echo "### 🛡️ ZAP Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Release:** ${{ steps.release_info.outputs.release_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Target URL:** ${{ secrets.ZAP_TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target URL:** ${{ steps.target_url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 Detailed reports have been sent to Telegram and are available on the Streamlit Dashboard." >> $GITHUB_STEP_SUMMARY
