@@ -29,37 +29,37 @@ jobs:
       - name: Deploy via SSH (Release)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_IP }}
-          username: ${{ secrets.CICD_SERVER_USER }}
-          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_PORT }}
+          host: ${{ secrets.CICD_SERVER_VPN_IP }}
+          username: ${{ secrets.CICD_SERVER_VPN_USER }}
+          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_PATH }}
-            ansible-playbook -i inventories/production/inventory.yml playbooks/deploy-opensid-rilis-premium.yml --extra-vars "release_tag=${{ github.event.release.tag_name }}"
+            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
+            ansible-playbook -i inventories/staging/inventory.yml playbooks/test_api_remote.yml
 
-  deploy-prerelease:
-    # Hanya jalan kalau rilis dari branch master & prerelease = true,
-    # serta event adalah published atau edited
-    if: |
-      github.event.release.target_commitish == 'master' &&
-      github.event.release.prerelease == true &&
-      (github.event.action == 'published' || github.event.action == 'edited')
-    name: Deploy OpenSID (Pre-Release)
-    runs-on: ubuntu-latest
+  # deploy-prerelease:
+  #   # Hanya jalan kalau rilis dari branch master & prerelease = true,
+  #   # serta event adalah published atau edited
+  #   if: |
+  #     github.event.release.target_commitish == 'master' &&
+  #     github.event.release.prerelease == true &&
+  #     (github.event.action == 'published' || github.event.action == 'edited')
+  #   name: Deploy OpenSID (Pre-Release)
+  #   runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Ansible Code
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout Ansible Code
+  #       uses: actions/checkout@v4
 
-      - name: Deploy via SSH (Pre-Release)
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.CICD_SERVER_IP }}
-          username: ${{ secrets.CICD_SERVER_USER }}
-          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_PORT }}
-          script: |
-            set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_PATH }}
-            ansible-playbook -i inventories/production/inventory.yml playbooks/deploy-opensid-rilis-premium.yml --extra-vars "release_tag=${{ github.event.release.tag_name }}"
+  #     - name: Deploy via SSH (Pre-Release)
+  #       uses: appleboy/ssh-action@v1.2.0
+  #       with:
+  #         host: ${{ secrets.CICD_SERVER_IP }}
+  #         username: ${{ secrets.CICD_SERVER_USER }}
+  #         key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
+  #         port: ${{ secrets.CICD_SERVER_PORT }}
+  #         script: |
+  #           set -euo pipefail
+  #           cd ${{ secrets.CICD_SERVER_PATH }}
+  #           ansible-playbook -i inventories/production/inventory.yml playbooks/deploy-opensid-rilis-premium.yml --extra-vars "release_tag=${{ github.event.release.tag_name }}"

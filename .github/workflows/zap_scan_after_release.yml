@@ -1,0 +1,81 @@
+name: ZAP Scan After Release Deployment
+
+on:
+  workflow_run:
+    workflows: ["Deploy OpenSID with Ansible"]
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zap-scan-after-release
+  cancel-in-progress: false
+
+jobs:
+  zap-scan-production:
+    # Only run if:
+    # 1. The deploy workflow completed successfully
+    # 2. It was triggered by a release event (not prerelease)
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'release'
+    name: Run ZAP Security Scan on Production
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Ansible Code
+        uses: actions/checkout@v4
+
+      - name: Get Release Information
+        id: release_info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get the release that triggered the deploy workflow
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 1
+            });
+            
+            if (releases.data.length > 0) {
+              const release = releases.data[0];
+              core.setOutput('tag_name', release.tag_name);
+              core.setOutput('is_prerelease', release.prerelease);
+              core.setOutput('release_name', release.name || release.tag_name);
+            }
+
+      - name: Run ZAP Scan via Ansible
+        # Only proceed if it's not a prerelease
+        if: steps.release_info.outputs.is_prerelease == 'false'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.CICD_SERVER_VPN_IP }}
+          username: ${{ secrets.CICD_SERVER_VPN_USER }}
+          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
+          script: |
+            set -euo pipefail
+            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
+            
+            echo "🛡️ Starting OWASP ZAP Security Scan for Production Release"
+            echo "Release: ${{ steps.release_info.outputs.release_name }}"
+            echo "Target: ${{ secrets.ZAP_TARGET_URL }}"
+            
+            ansible-playbook -i inventories/production/inventory.yml playbooks/zap-scan.yml \
+              --extra-vars "zap_target_url=${{ secrets.ZAP_TARGET_URL }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### 🛡️ ZAP Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** ${{ steps.release_info.outputs.release_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target URL:** ${{ secrets.ZAP_TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Detailed reports have been sent to Telegram and are available on the Streamlit Dashboard." >> $GITHUB_STEP_SUMMARY
