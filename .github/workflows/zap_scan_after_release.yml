@@ -57,13 +57,13 @@ jobs:
       - name: Run ZAP Scan via Ansible
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_IP }}
-          username: ${{ secrets.CICD_SERVER_USER }}
-          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_PORT }}
+          host: ${{ secrets.CICD_SERVER_VPN_IP }}
+          username: ${{ secrets.CICD_SERVER_VPN_USER }}
+          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_PATH }}
+            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
             
             echo "🛡️ Starting OWASP ZAP Security Scan for Production Release"
             echo "Release: ${{ steps.release_info.outputs.release_name }}"
