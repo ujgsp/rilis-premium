@@ -1,8 +1,9 @@
 name: ZAP Scan After Release Deployment
 
 on:
-  release:
-    types: [published, edited]
+  workflow_run:
+    workflows: ["Deploy OpenSID with Ansible"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       target_url:
@@ -21,10 +22,10 @@ jobs:
   zap-scan-production:
     # Only run if:
     # 1. Manual trigger (workflow_dispatch), OR
-    # 2. Release from master branch AND not a prerelease
+    # 2. Deploy OpenSID workflow completed successfully
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event.release.target_commitish == 'master' && github.event.release.prerelease == false)
+      github.event.workflow_run.conclusion == 'success'
     name: Run ZAP Security Scan on Production
     runs-on: ubuntu-latest
 
@@ -40,9 +41,9 @@ jobs:
             echo "release_name=Manual Trigger" >> $GITHUB_OUTPUT
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           else
-            echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-            echo "release_name=${{ github.event.release.name || github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-            echo "is_prerelease=${{ github.event.release.prerelease }}" >> $GITHUB_OUTPUT
+            echo "tag_name=${{ github.event.workflow_run.id }}" >> $GITHUB_OUTPUT
+            echo "release_name=Deploy OpenSID Release ${{ github.event.workflow_run.name }}" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Set Target URL
