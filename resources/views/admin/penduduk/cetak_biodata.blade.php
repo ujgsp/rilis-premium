@@ -84,7 +84,7 @@
                     <td>{{ $penduduk->pendidikan_kk }}</td>
                 </tr>
                 <tr>
-                    <td>Pekerjaan</td>
+                    <td><?= HEADER_PEKERJAAN ?></td>
                     <td>:</td>
                     <td>{{ $penduduk->pekerjaan }}</td>
                 </tr>
@@ -99,7 +99,7 @@
                     <td>{{ $penduduk->golongan_darah }}</td>
                 </tr>
                 <tr>
-                    <td>Cacat</td>
+                    <td>Disabilitas</td>
                     <td>:</td>
                     <td>{{ $penduduk->cacat }}</td>
                 </tr>
