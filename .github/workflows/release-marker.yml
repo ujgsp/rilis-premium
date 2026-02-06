@@ -15,13 +15,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.target_commitish }}
 
       - name: Save release tag to marker file
         run: |
           TAG="${{ github.event.release.tag_name }}"
           PUBLISHED_AT="${{ github.event.release.published_at }}"
+          BRANCH="${{ github.event.release.target_commitish }}"
           
           echo "Marking release ${TAG} as pending deploy"
+          echo "Target branch: ${BRANCH}"
           
           # Create marker file
           mkdir -p .github
@@ -38,6 +42,8 @@ jobs:
 
       - name: Commit marker file
         run: |
+          BRANCH="${{ github.event.release.target_commitish }}"
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
@@ -47,6 +53,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Mark release ${{ github.event.release.tag_name }} for midnight deploy"
-            git push
-            echo "✅ Marker committed and pushed"
+            git push origin HEAD:${BRANCH}
+            echo "✅ Marker committed and pushed to ${BRANCH}"
           fi
