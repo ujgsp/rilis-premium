@@ -1,0 +1,42 @@
+name: Mark OpenSID Release for Midnight Deploy
+
+on:
+  release:
+    types: [published, edited]
+
+permissions:
+  contents: write
+
+jobs:
+  mark-release:
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Save release tag to repository variable
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.payload.release.tag_name
+            
+            console.log(`Marking release ${tag} as pending deploy`)
+            
+            try {
+              // Try update first (if variable already exists)
+              await github.rest.actions.updateRepoVariable({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: "OPENSID_PENDING_RELEASE",
+                value: tag
+              })
+              console.log(`✅ Updated existing marker to ${tag}`)
+            } catch (error) {
+              // If not exists, create new
+              await github.rest.actions.createRepoVariable({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: "OPENSID_PENDING_RELEASE",
+                value: tag
+              })
+              console.log(`✅ Created new marker for ${tag}`)
+            }
