@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: deploy-opensid-siappakai-rilis
@@ -20,33 +20,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get pending release version
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for pending release
         id: pending
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const vars = await github.rest.actions.listRepoVariables({
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            })
-
-            const pending = vars.data.variables.find(v => v.name === 'OPENSID_PENDING_RELEASE')
-
-            if (!pending) {
-              core.notice("No pending release found. Skipping deploy.")
-              core.setOutput("deploy", "false")
-              return
-            }
-
-            core.setOutput("deploy", "true")
-            core.setOutput("tag", pending.value)
+        run: |
+          if [ -f .github/PENDING_RELEASE ]; then
+            echo "Found pending release marker"
+            cat .github/PENDING_RELEASE
+            
+            TAG=$(jq -r '.tag' .github/PENDING_RELEASE)
+            
+            echo "deploy=true" >> $GITHUB_OUTPUT
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+            echo "✅ Will deploy ${TAG}"
+          else
+            echo "No pending release found. Skipping deploy."
+            echo "deploy=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Stop if no release to deploy
         if: steps.pending.outputs.deploy != 'true'
         run: exit 0
-
-      - name: Checkout Ansible Code
-        uses: actions/checkout@v4
 
       - name: Deploy OpenSID ${{ steps.pending.outputs.tag }}
         uses: appleboy/ssh-action@v1.2.0
@@ -66,13 +62,19 @@ jobs:
             echo "Deployment started."
 
       - name: Clear pending release marker
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.actions.deleteRepoVariable({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: "OPENSID_PENDING_RELEASE"
-            })
-
-            console.log("Pending release marker cleared")
+        run: |
+          if [ -f .github/PENDING_RELEASE ]; then
+            TAG=$(jq -r '.tag' .github/PENDING_RELEASE)
+            
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            
+            rm .github/PENDING_RELEASE
+            git add .github/PENDING_RELEASE
+            git commit -m "Clear release marker after deploying ${TAG}"
+            git push
+            
+            echo "✅ Pending release marker cleared"
+          else
+            echo "No marker file to clear"
+          fi
