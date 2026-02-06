@@ -1,8 +1,12 @@
-name: Deploy SiapPakai Update OpenSID with Ansible
+name: Midnight Deploy SiapPakai OpenSID with Ansible
 
 on:
-  release:
-    types: [published, edited, prereleased]
+  schedule:
+    # - cron: '0 17 * * *' # 00:00 WIB
+    - cron: '0 5 * * *'    # 12:00 WIB
+    - cron: '15 6 * * *'   # 13:15 WIB
+    - cron: '0 8 * * *'    # 15:00 WIB
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,27 +17,62 @@ concurrency:
 
 jobs:
   deploy:
-    # rilis dari branch 'master' & bukan prerelease
-    if: |
-      github.event.release.target_commitish == 'master' &&
-      github.event.release.prerelease == false &&
-      (github.event.action == 'published' || github.event.action == 'edited')
-    name: Deploy SiapPakai Update OpenSID ke Server SiapPakai
     runs-on: ubuntu-latest
 
     steps:
+      - name: Get pending release version
+        id: pending
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const vars = await github.rest.actions.listRepoVariables({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            })
+
+            const pending = vars.data.variables.find(v => v.name === 'OPENSID_PENDING_RELEASE')
+
+            if (!pending) {
+              core.notice("No pending release found. Skipping deploy.")
+              core.setOutput("deploy", "false")
+              return
+            }
+
+            core.setOutput("deploy", "true")
+            core.setOutput("tag", pending.value)
+
+      - name: Stop if no release to deploy
+        if: steps.pending.outputs.deploy != 'true'
+        run: exit 0
+
       - name: Checkout Ansible Code
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH using appleboy/ssh-action
+      - name: Deploy OpenSID ${{ steps.pending.outputs.tag }}
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_IP }}
-          username: ${{ secrets.CICD_SERVER_USER }}
-          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_PORT }}
+          host: ${{ secrets.CICD_SERVER_VPN_IP }}
+          username: ${{ secrets.CICD_SERVER_VPN_USER }}
+          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_PATH }}
-            nohup ansible-playbook -i inventories/production/inventory.yml playbooks/siappakai-update-opensid.yml --vault-password-file ~/.vault_pass.txt > /tmp/ansible-siappakai-update-opensid.log 2>&1 &
-            echo "Ansible playbook started in background. Check /tmp/ansible-siappakai-update-opensid.log for output."
+            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
+
+            echo "Deploying OpenSID version ${{ steps.pending.outputs.tag }}"
+
+            ansible-playbook -i inventories/staging/inventory.yml playbooks/test_api_remote.yml
+
+            echo "Deployment started."
+
+      - name: Clear pending release marker
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.deleteRepoVariable({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "OPENSID_PENDING_RELEASE"
+            })
+
+            console.log("Pending release marker cleared")
