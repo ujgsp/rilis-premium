@@ -5,7 +5,8 @@ on:
     # - cron: '0 17 * * *' # 00:00 WIB
     - cron: '0 5 * * *'    # 12:00 WIB
     - cron: '15 6 * * *'   # 13:15 WIB
-    - cron: '0 8 * * *'    # 15:00 WIB
+    - cron: '0 13 * * *'   # 20:00 WIB
+    - cron: '30 13 * * *'  # 20:30 WIB
   workflow_dispatch:
 
 permissions:
@@ -42,28 +43,22 @@ jobs:
             echo "deploy=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Stop if no release to deploy
-        if: steps.pending.outputs.deploy != 'true'
-        run: exit 0
-
       - name: Deploy OpenSID ${{ steps.pending.outputs.tag }}
+        if: steps.pending.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_VPN_IP }}
-          username: ${{ secrets.CICD_SERVER_VPN_USER }}
-          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
+          host: ${{ secrets.CICD_SERVER_IP }}
+          username: ${{ secrets.CICD_SERVER_USER }}
+          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
-
-            echo "Deploying OpenSID version ${{ steps.pending.outputs.tag }}"
-
-            ansible-playbook -i inventories/staging/inventory.yml playbooks/test_api_remote.yml
-
-            echo "Deployment started."
+            cd ${{ secrets.CICD_SERVER_PATH }}
+            nohup ansible-playbook -i inventories/production/inventory.yml playbooks/siappakai-update-opensid.yml --vault-password-file ~/.vault_pass.txt > /tmp/ansible-siappakai-update-opensid.log 2>&1 &
+            echo "Ansible playbook started in background. Check /tmp/ansible-siappakai-update-opensid.log for output."
 
       - name: Clear pending release marker
+        if: steps.pending.outputs.deploy == 'true'
         run: |
           if [ -f .github/PENDING_RELEASE ]; then
             TAG=$(jq -r '.tag' .github/PENDING_RELEASE)
