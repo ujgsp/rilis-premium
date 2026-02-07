@@ -47,15 +47,19 @@ jobs:
         if: steps.pending.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.CICD_SERVER_IP }}
-          username: ${{ secrets.CICD_SERVER_USER }}
-          key: ${{ secrets.CICD_SERVER_PRIVATE_KEY }}
-          port: ${{ secrets.CICD_SERVER_PORT }}
+          host: ${{ secrets.CICD_SERVER_VPN_IP }}
+          username: ${{ secrets.CICD_SERVER_VPN_USER }}
+          key: ${{ secrets.CICD_SERVER_VPN_PRIVATE_KEY }}
+          port: ${{ secrets.CICD_SERVER_VPN_PORT }}
           script: |
             set -euo pipefail
-            cd ${{ secrets.CICD_SERVER_PATH }}
-            nohup ansible-playbook -i inventories/production/inventory.yml playbooks/siappakai-update-opensid.yml --vault-password-file ~/.vault_pass.txt > /tmp/ansible-siappakai-update-opensid.log 2>&1 &
-            echo "Ansible playbook started in background. Check /tmp/ansible-siappakai-update-opensid.log for output."
+            cd ${{ secrets.CICD_SERVER_VPN_PATH }}
+            
+            echo "Deploying OpenSID version ${{ steps.pending.outputs.tag }}"
+
+            ansible-playbook -i inventories/staging/inventory.yml playbooks/test_api_remote.yml
+
+            echo "Deployment started."
 
       - name: Clear pending release marker
         if: steps.pending.outputs.deploy == 'true'
